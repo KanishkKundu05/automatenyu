@@ -3,35 +3,37 @@
 import { useState, useEffect, useMemo } from "react";
 import { frames } from "@/data/frames";
 
-interface ParsedSegment {
+interface Segment {
   text: string;
-  bright: boolean;
+  cls: string;
 }
 
-function parseLine(line: string): ParsedSegment[] {
-  const segments: ParsedSegment[] = [];
-  let remaining = line;
+function parseLineSegments(line: string): Segment[] {
+  const segments: Segment[] = [];
+  let currentCls = "violet";
+  let currentText = "";
 
-  while (remaining.length > 0) {
-    const openIdx = remaining.indexOf("<b>");
-    if (openIdx === -1) {
-      segments.push({ text: remaining, bright: false });
-      break;
+  for (let i = 0; i < line.length; i++) {
+    const ch = line[i];
+    let cls: string;
+
+    if (i === 0 || i === line.length - 1) {
+      cls = "violet";
+    } else if (ch === "%") {
+      cls = "violet";
+    } else {
+      cls = "center";
     }
-    if (openIdx > 0) {
-      segments.push({ text: remaining.slice(0, openIdx), bright: false });
+
+    if (cls === currentCls) {
+      currentText += ch;
+    } else {
+      if (currentText) segments.push({ text: currentText, cls: currentCls });
+      currentCls = cls;
+      currentText = ch;
     }
-    const closeIdx = remaining.indexOf("</b>", openIdx);
-    if (closeIdx === -1) {
-      segments.push({ text: remaining.slice(openIdx + 3), bright: true });
-      break;
-    }
-    segments.push({
-      text: remaining.slice(openIdx + 3, closeIdx),
-      bright: true,
-    });
-    remaining = remaining.slice(closeIdx + 4);
   }
+  if (currentText) segments.push({ text: currentText, cls: currentCls });
 
   return segments;
 }
@@ -52,7 +54,7 @@ export default function AsciiAnimation() {
   }, []);
 
   const parsedFrames = useMemo(
-    () => frames.map((frame) => frame.map((line) => parseLine(line))),
+    () => frames.map((frame) => frame.map((line) => parseLineSegments(line))),
     []
   );
 
@@ -63,15 +65,11 @@ export default function AsciiAnimation() {
       <pre className="ascii-art">
         {frame.map((segments, lineIdx) => (
           <div key={lineIdx}>
-            {segments.map((seg, segIdx) =>
-              seg.bright ? (
-                <span key={segIdx} className="bright">
-                  {seg.text}
-                </span>
-              ) : (
-                <span key={segIdx}>{seg.text}</span>
-              )
-            )}
+            {segments.map((seg, segIdx) => (
+              <span key={segIdx} className={seg.cls}>
+                {seg.text}
+              </span>
+            ))}
           </div>
         ))}
       </pre>

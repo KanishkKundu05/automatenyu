@@ -33,26 +33,20 @@ body {
 }
 
 .ascii-art {
-  font-size: 14px;
-  line-height: 1.2;
-  letter-spacing: 0.05em;
+  font-size: clamp(4px, 1.4vw, 14px);
+  line-height: 1.15;
+  letter-spacing: 0;
   white-space: pre;
   text-align: center;
 }
 
-.bright {
-  color: #7b3fa0;
-  text-shadow: 0 0 6px rgba(123, 63, 160, 0.6), 0 0 12px rgba(123, 63, 160, 0.3);
+.violet {
+  color: #8b5cf6;
+  text-shadow: 0 0 6px rgba(139, 92, 246, 0.5),
+    0 0 14px rgba(139, 92, 246, 0.25);
 }
 
-@media (max-width: 600px) {
-  .ascii-art {
-    font-size: 8px;
-  }
-}
-
-@media (min-width: 601px) and (max-width: 900px) {
-  .ascii-art {
-    font-size: 11px;
-  }
+.center {
+  color: #ffffff;
+  text-shadow: 0 0 4px rgba(255, 255, 255, 0.3);
 }
