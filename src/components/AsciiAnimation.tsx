@@ -2,6 +2,8 @@
 
 import { useState, useEffect, useMemo } from "react";
 import { frames } from "@/data/frames";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
 
 interface Segment {
   text: string;
@@ -60,6 +62,15 @@ export default function AsciiAnimation() {
 
   const frame = parsedFrames[currentFrame];
 
+  const [email, setEmail] = useState("");
+  const [submitted, setSubmitted] = useState(false);
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!email) return;
+    setSubmitted(true);
+  };
+
   return (
     <div className={`ascii-container ${mounted ? "fade-in" : ""}`}>
       <pre className="ascii-art">
@@ -73,6 +84,25 @@ export default function AsciiAnimation() {
           </div>
         ))}
       </pre>
+      <div className="mt-6 flex justify-center">
+        {submitted ? (
+          <p className="text-sm text-[#8b5cf6]">You&apos;re on the list!</p>
+        ) : (
+          <form onSubmit={handleSubmit} className="flex w-full max-w-sm gap-2">
+            <Input
+              type="email"
+              placeholder="Enter your email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              required
+              className="bg-[#2d1b4e]/50 border-[#8b5cf6]/30 text-white placeholder:text-[#8888a0]"
+            />
+            <Button type="submit" className="bg-[#8b5cf6] hover:bg-[#7c3aed] text-white">
+              Join
+            </Button>
+          </form>
+        )}
+      </div>
     </div>
   );
 }
