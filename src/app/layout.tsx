@@ -2,8 +2,8 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "NYU - ASCII Animation",
-  description: "NYU torch ASCII art animation",
+  title: "Automate NYU",
+  description: "Automate NYU",
 };
 
 export default function RootLayout({
