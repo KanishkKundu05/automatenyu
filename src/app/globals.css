@@ -121,10 +121,29 @@ body {
   --border: rgba(139, 92, 246, 0.25);
   --input: rgba(139, 92, 246, 0.25);
   --ring: #8b5cf6;
+  --sidebar: #140921;
+  --sidebar-foreground: #f5f0ff;
+  --sidebar-primary: #8b5cf6;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: rgba(139, 92, 246, 0.12);
+  --sidebar-accent-foreground: #f5f0ff;
+  --sidebar-border: rgba(139, 92, 246, 0.18);
+  --sidebar-ring: #8b5cf6;
 }
 
 @layer base {
   * {
     @apply border-border outline-ring/50;
   }
+}
+
+.dark {
+  --sidebar: #140921;
+  --sidebar-foreground: #f5f0ff;
+  --sidebar-primary: #8b5cf6;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: rgba(139, 92, 246, 0.12);
+  --sidebar-accent-foreground: #f5f0ff;
+  --sidebar-border: rgba(139, 92, 246, 0.18);
+  --sidebar-ring: #8b5cf6;
 }
