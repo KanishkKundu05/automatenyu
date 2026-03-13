@@ -14,7 +14,6 @@ html,
 body {
   height: 100%;
   width: 100%;
-  overflow: hidden;
 }
 
 body {
@@ -24,18 +23,12 @@ body {
     "Consolas", "Monaco", monospace;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  min-height: 100%;
 }
 
 .ascii-container {
   opacity: 0;
-  transition: opacity 0.8s ease-in;
-}
-
-.ascii-container.fade-in {
-  opacity: 1;
+  animation: ascii-fade-in 0.8s ease-in forwards;
 }
 
 .ascii-art {
@@ -55,6 +48,16 @@ body {
 .center {
   color: #ffffff;
   text-shadow: 0 0 4px rgba(255, 255, 255, 0.3);
+}
+
+@keyframes ascii-fade-in {
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
 }
 
 @theme inline {

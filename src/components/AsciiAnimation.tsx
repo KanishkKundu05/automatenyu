@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { frames } from "@/data/frames";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -42,11 +42,6 @@ function parseLineSegments(line: string): Segment[] {
 
 export default function AsciiAnimation() {
   const [currentFrame, setCurrentFrame] = useState(0);
-  const [mounted, setMounted] = useState(false);
-
-  useEffect(() => {
-    setMounted(true);
-  }, []);
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -72,7 +67,7 @@ export default function AsciiAnimation() {
   };
 
   return (
-    <div className={`ascii-container ${mounted ? "fade-in" : ""}`}>
+    <div className="ascii-container flex min-h-screen w-full flex-col items-center justify-center px-6">
       <pre className="ascii-art">
         {frame.map((segments, lineIdx) => (
           <div key={lineIdx}>
