@@ -10,8 +10,6 @@ import {
   Menu,
   PanelLeftClose,
   PanelLeftOpen,
-  ScanSearch,
-  Square,
   Sparkles,
 } from "lucide-react";
 import {
@@ -26,28 +24,19 @@ import {
 import { cn } from "@/lib/utils";
 
 const CANVAS_SIZE = 1024;
-const PAPER_COLOR = "#f9f4ea";
-const DESKTOP_SIDEBAR_WIDTH = "w-[23.5rem]";
+const CANVAS_BG = "#12071f";
+const DESKTOP_SIDEBAR_WIDTH = "w-[23rem]";
 const DESKTOP_SIDEBAR_COLLAPSED_WIDTH = "w-[5.5rem]";
 
 type PreparedPdf = {
   dataUrl: string;
   name: string;
-  size: number;
-  pageCount: number;
 };
 
 type PreparedReference = {
   dataUrl: string;
   name: string;
-  size: number;
 };
-
-function formatBytes(bytes: number) {
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-}
 
 function mimeFromDataUrl(dataUrl: string) {
   const match = dataUrl.match(/^data:(.*?);base64,/);
@@ -141,7 +130,7 @@ async function preparePdfPreview(file: File) {
     throw new Error("Unable to prepare the uploaded homework preview.");
   }
 
-  squareContext.fillStyle = PAPER_COLOR;
+  squareContext.fillStyle = "#f7f4ff";
   squareContext.fillRect(0, 0, CANVAS_SIZE, CANVAS_SIZE);
 
   const innerScale = Math.min(
@@ -153,14 +142,11 @@ async function preparePdfPreview(file: File) {
   const drawX = (CANVAS_SIZE - drawWidth) / 2;
   const drawY = (CANVAS_SIZE - drawHeight) / 2;
 
-  squareContext.fillStyle = "#fffdf8";
+  squareContext.fillStyle = "#ffffff";
   squareContext.fillRect(drawX - 14, drawY - 14, drawWidth + 28, drawHeight + 28);
   squareContext.drawImage(pageCanvas, drawX, drawY, drawWidth, drawHeight);
 
-  return {
-    dataUrl: squareCanvas.toDataURL("image/png"),
-    pageCount: pdf.numPages,
-  };
+  return squareCanvas.toDataURL("image/png");
 }
 
 function HiddenInputs({
@@ -194,6 +180,85 @@ function HiddenInputs({
   );
 }
 
+function StatusDot({
+  active,
+  accent = "var(--accent)",
+  busy = false,
+}: {
+  active: boolean;
+  accent?: string;
+  busy?: boolean;
+}) {
+  return (
+    <span
+      className={cn(
+        "block rounded-full border border-white/10 transition",
+        busy ? "animate-pulse" : "",
+        active ? "opacity-100 shadow-[0_0_22px_var(--accent-shadow)]" : "opacity-45"
+      )}
+      style={{
+        width: 10,
+        height: 10,
+        background: active ? accent : "rgba(192,192,192,0.18)",
+        ["--accent-shadow" as string]: active ? accent : "rgba(0,0,0,0)",
+      }}
+    />
+  );
+}
+
+function PreviewPlate({
+  icon,
+  preview,
+  active,
+  busy = false,
+  onClick,
+}: {
+  icon: React.ReactNode;
+  preview?: string | null;
+  active: boolean;
+  busy?: boolean;
+  onClick?: () => void;
+}) {
+  return (
+    <button
+      className={cn(
+        "group relative flex aspect-[5/4] w-full items-center justify-center overflow-hidden rounded-[1.4rem] border transition duration-200",
+        active
+          ? "border-[color:var(--edge-strong)] bg-[linear-gradient(160deg,rgba(139,92,246,0.14),rgba(45,27,78,0.82))] shadow-[0_18px_50px_rgba(139,92,246,0.16)]"
+          : "border-[color:var(--edge)] bg-[linear-gradient(160deg,rgba(75,48,122,0.35),rgba(26,10,46,0.86))]",
+        onClick ? "hover:-translate-y-0.5 hover:border-[color:var(--edge-strong)]" : ""
+      )}
+      onClick={onClick}
+      type={onClick ? "button" : undefined}
+    >
+      {preview ? (
+        <>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            alt=""
+            className="h-full w-full object-cover transition duration-300 group-hover:scale-[1.02]"
+            src={preview}
+          />
+          <div className="absolute inset-0 bg-[linear-gradient(180deg,transparent,rgba(13,6,23,0.45))]" />
+        </>
+      ) : (
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(139,92,246,0.26),transparent_42%),linear-gradient(180deg,rgba(45,27,78,0.92),rgba(20,9,35,0.96))]" />
+      )}
+
+      <div className="absolute left-3 top-3 flex gap-1.5">
+        <StatusDot active={active} busy={busy} />
+        <StatusDot active={preview != null} accent="#c4b5fd" />
+      </div>
+
+      <div className="relative flex size-14 items-center justify-center rounded-[1.2rem] border border-white/10 bg-white/8 text-[color:var(--ink)] backdrop-blur">
+        {busy ? <LoaderCircle className="size-5 animate-spin" /> : icon}
+      </div>
+
+      <span className="sr-only">Upload</span>
+    </button>
+  );
+}
+
 export default function HandwrittenHwStudio() {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
@@ -206,11 +271,7 @@ export default function HandwrittenHwStudio() {
   const [isPreparingPdf, setIsPreparingPdf] = useState(false);
   const [isPreparingReference, setIsPreparingReference] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
-  const [statusMessage, setStatusMessage] = useState(
-    "Upload a PDF and a handwriting sample to generate a handwritten paper."
-  );
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const [lastGeneratedAt, setLastGeneratedAt] = useState<string | null>(null);
+  const [hasError, setHasError] = useState(false);
 
   const pdfInputRef = useRef<HTMLInputElement>(null);
   const handwritingInputRef = useRef<HTMLInputElement>(null);
@@ -222,15 +283,6 @@ export default function HandwrittenHwStudio() {
     !isGenerating &&
     !isPreparingPdf &&
     !isPreparingReference;
-  const readyLabel = generatedImage
-    ? "Result ready"
-    : pdfFile && referenceFile
-      ? "Ready to render"
-      : pdfFile
-        ? "Waiting on handwriting reference"
-        : referenceFile
-          ? "Waiting on PDF"
-          : "Awaiting uploads";
 
   useEffect(() => {
     let cancelled = false;
@@ -245,12 +297,12 @@ export default function HandwrittenHwStudio() {
       if (!context) return;
 
       context.clearRect(0, 0, CANVAS_SIZE, CANVAS_SIZE);
-      context.fillStyle = PAPER_COLOR;
+      context.fillStyle = CANVAS_BG;
       context.fillRect(0, 0, CANVAS_SIZE, CANVAS_SIZE);
 
-      context.strokeStyle = "rgba(34, 54, 43, 0.06)";
-      context.lineWidth = 1;
-      for (let offset = 64; offset < CANVAS_SIZE; offset += 64) {
+      for (let offset = 72; offset < CANVAS_SIZE; offset += 72) {
+        context.strokeStyle = "rgba(139, 92, 246, 0.08)";
+        context.lineWidth = 1;
         context.beginPath();
         context.moveTo(offset, 0);
         context.lineTo(offset, CANVAS_SIZE);
@@ -261,28 +313,37 @@ export default function HandwrittenHwStudio() {
         context.stroke();
       }
 
-      context.fillStyle = "rgba(255, 255, 255, 0.68)";
-      context.fillRect(48, 48, CANVAS_SIZE - 96, CANVAS_SIZE - 96);
-
       if (!activeCanvasImage) {
-        context.strokeStyle = "rgba(43, 63, 52, 0.18)";
-        context.setLineDash([14, 12]);
+        context.save();
+        context.translate(CANVAS_SIZE / 2, CANVAS_SIZE / 2);
+        context.strokeStyle = hasError
+          ? "rgba(239, 68, 68, 0.65)"
+          : "rgba(139, 92, 246, 0.4)";
+        context.fillStyle = "rgba(139, 92, 246, 0.06)";
         context.lineWidth = 3;
-        context.strokeRect(112, 112, CANVAS_SIZE - 224, CANVAS_SIZE - 224);
+        context.beginPath();
+        context.roundRect(-288, -288, 576, 576, 44);
+        context.fill();
+        context.stroke();
+        context.setLineDash([16, 14]);
+        context.beginPath();
+        context.roundRect(-220, -220, 440, 440, 36);
+        context.stroke();
         context.setLineDash([]);
-        context.fillStyle = "#214137";
-        context.font =
-          '600 34px "Iowan Old Style", "Palatino Linotype", "Book Antiqua", Palatino, Georgia, serif';
-        context.textAlign = "center";
-        context.fillText("Generated pages land here", CANVAS_SIZE / 2, 456);
-        context.fillStyle = "rgba(33, 65, 55, 0.72)";
-        context.font =
-          '500 20px "JetBrains Mono", "Fira Code", "SF Mono", monospace';
-        context.fillText(
-          "Upload the homework PDF, add a handwriting reference, then render.",
-          CANVAS_SIZE / 2,
-          496
-        );
+
+        const ringRadius = hasError ? 86 : 104;
+        context.strokeStyle = hasError
+          ? "rgba(239, 68, 68, 0.8)"
+          : "rgba(139, 92, 246, 0.92)";
+        context.fillStyle = hasError
+          ? "rgba(239, 68, 68, 0.12)"
+          : "rgba(139, 92, 246, 0.16)";
+        context.beginPath();
+        context.arc(0, 0, ringRadius, 0, Math.PI * 2);
+        context.fill();
+        context.stroke();
+        context.restore();
+
         return;
       }
 
@@ -290,42 +351,37 @@ export default function HandwrittenHwStudio() {
         const image = await loadImage(activeCanvasImage);
         if (cancelled) return;
 
-        const maxWidth = CANVAS_SIZE - 144;
-        const maxHeight = CANVAS_SIZE - 144;
+        const maxWidth = CANVAS_SIZE - 136;
+        const maxHeight = CANVAS_SIZE - 136;
         const scale = Math.min(maxWidth / image.width, maxHeight / image.height);
         const drawWidth = image.width * scale;
         const drawHeight = image.height * scale;
         const drawX = (CANVAS_SIZE - drawWidth) / 2;
         const drawY = (CANVAS_SIZE - drawHeight) / 2;
 
-        context.shadowColor = "rgba(46, 34, 16, 0.12)";
-        context.shadowBlur = 28;
-        context.shadowOffsetY = 16;
-        context.fillStyle = "#fffdf8";
+        context.shadowColor = generatedImage
+          ? "rgba(139, 92, 246, 0.34)"
+          : "rgba(139, 92, 246, 0.18)";
+        context.shadowBlur = generatedImage ? 34 : 26;
+        context.shadowOffsetY = 20;
+        context.fillStyle = "#fbf8ff";
         context.fillRect(drawX - 18, drawY - 18, drawWidth + 36, drawHeight + 36);
         context.shadowColor = "transparent";
         context.drawImage(image, drawX, drawY, drawWidth, drawHeight);
 
-        context.fillStyle = "rgba(33, 65, 55, 0.92)";
-        context.font =
-          '600 20px "JetBrains Mono", "Fira Code", "SF Mono", monospace';
-        context.textAlign = "left";
-        context.fillText(
-          generatedImage ? "generated result" : "source PDF preview",
-          72,
-          88
-        );
-      } catch {
+        context.fillStyle = "rgba(139, 92, 246, 0.95)";
+        context.beginPath();
+        context.arc(drawX + 20, drawY + 20, 6, 0, Math.PI * 2);
+        context.fill();
+
+        context.fillStyle = "rgba(196, 181, 253, 0.95)";
+        context.beginPath();
+        context.arc(drawX + 40, drawY + 20, 6, 0, Math.PI * 2);
+        context.fill();
+      } catch (error) {
         if (!cancelled) {
-          context.fillStyle = "#8f4b31";
-          context.font =
-            '600 24px "JetBrains Mono", "Fira Code", "SF Mono", monospace';
-          context.textAlign = "center";
-          context.fillText(
-            "Preview failed to load.",
-            CANVAS_SIZE / 2,
-            CANVAS_SIZE / 2
-          );
+          console.error(error);
+          setHasError(true);
         }
       }
     }
@@ -335,38 +391,27 @@ export default function HandwrittenHwStudio() {
     return () => {
       cancelled = true;
     };
-  }, [activeCanvasImage, generatedImage]);
+  }, [activeCanvasImage, generatedImage, hasError]);
 
   async function handlePdfFile(file: File) {
     if (file.type !== "application/pdf") {
-      setErrorMessage("Upload a PDF for the homework answer.");
+      setHasError(true);
       return;
     }
 
     setIsPreparingPdf(true);
-    setErrorMessage(null);
+    setHasError(false);
     setGeneratedImage(null);
-    setStatusMessage("Rasterizing the PDF so it can be used as the base image.");
 
     try {
       const prepared = await preparePdfPreview(file);
       setPdfFile({
-        dataUrl: prepared.dataUrl,
+        dataUrl: prepared,
         name: file.name,
-        size: file.size,
-        pageCount: prepared.pageCount,
       });
-      setStatusMessage(
-        referenceFile
-          ? "Inputs ready. Render a handwritten paper when you want."
-          : "PDF ready. Add a handwriting reference."
-      );
     } catch (error) {
-      setErrorMessage(
-        error instanceof Error
-          ? error.message
-          : "Unable to prepare the uploaded PDF."
-      );
+      console.error(error);
+      setHasError(true);
     } finally {
       setIsPreparingPdf(false);
     }
@@ -374,32 +419,22 @@ export default function HandwrittenHwStudio() {
 
   async function handleReferenceFile(file: File) {
     if (!file.type.startsWith("image/")) {
-      setErrorMessage("Upload an image sample of the user's handwriting.");
+      setHasError(true);
       return;
     }
 
     setIsPreparingReference(true);
-    setErrorMessage(null);
-    setStatusMessage("Preparing the handwriting sample as a photo reference.");
+    setHasError(false);
 
     try {
       const prepared = await prepareReferenceImage(file);
       setReferenceFile({
         dataUrl: prepared,
         name: file.name,
-        size: file.size,
       });
-      setStatusMessage(
-        pdfFile
-          ? "Inputs ready. Render a handwritten paper when you want."
-          : "Handwriting reference ready. Upload a PDF next."
-      );
     } catch (error) {
-      setErrorMessage(
-        error instanceof Error
-          ? error.message
-          : "Unable to prepare the handwriting reference."
-      );
+      console.error(error);
+      setHasError(true);
     } finally {
       setIsPreparingReference(false);
     }
@@ -409,8 +444,7 @@ export default function HandwrittenHwStudio() {
     if (!pdfFile || !referenceFile || isGenerating) return;
 
     setIsGenerating(true);
-    setErrorMessage(null);
-    setStatusMessage("Sending the homework page and handwriting reference to FLUX.2 Flex.");
+    setHasError(false);
 
     try {
       const response = await fetch("/api/handwritten-hw", {
@@ -440,21 +474,10 @@ export default function HandwrittenHwStudio() {
 
       startTransition(() => {
         setGeneratedImage(payload.imageDataUrl);
-        setLastGeneratedAt(
-          new Date().toLocaleTimeString([], {
-            hour: "numeric",
-            minute: "2-digit",
-          })
-        );
-        setStatusMessage("Handwritten paper rendered on the canvas.");
       });
     } catch (error) {
-      setErrorMessage(
-        error instanceof Error
-          ? error.message
-          : "Unable to generate the handwritten result."
-      );
-      setStatusMessage("Generation failed. Fix the issue and try again.");
+      console.error(error);
+      setHasError(true);
     } finally {
       setIsGenerating(false);
     }
@@ -468,8 +491,31 @@ export default function HandwrittenHwStudio() {
     link.click();
   }
 
-  const sidebarSectionClass =
-    "rounded-[1.4rem] border border-[color:var(--edge)] bg-[color:var(--panel)] p-4 shadow-[0_24px_60px_rgba(31,35,25,0.06)] backdrop-blur-xl";
+  const panelClass =
+    "rounded-[1.55rem] border border-[color:var(--edge)] bg-[color:var(--panel)] shadow-[0_24px_60px_rgba(0,0,0,0.28)] backdrop-blur-xl";
+
+  const IconPill = ({
+    children,
+    active = false,
+    danger = false,
+  }: {
+    children: React.ReactNode;
+    active?: boolean;
+    danger?: boolean;
+  }) => (
+    <div
+      className={cn(
+        "flex h-11 w-11 items-center justify-center rounded-2xl border transition",
+        danger
+          ? "border-red-400/30 bg-red-500/10 text-red-300"
+          : active
+            ? "border-[color:var(--edge-strong)] bg-[color:var(--accent-soft)] text-[color:var(--accent)]"
+            : "border-[color:var(--edge)] bg-white/5 text-[color:var(--ink-soft)]"
+      )}
+    >
+      {children}
+    </div>
+  );
 
   const SidebarContent = ({
     collapsed,
@@ -481,49 +527,37 @@ export default function HandwrittenHwStudio() {
     <div className="flex h-full flex-col">
       <div
         className={cn(
-          "flex items-center border-b border-[color:var(--edge)] px-4 py-4",
-          collapsed ? "justify-center" : "justify-between gap-3 px-5"
+          "flex items-center border-b border-[color:var(--edge)] p-4",
+          collapsed ? "justify-center" : "justify-between"
         )}
       >
         {collapsed ? (
           <button
-            className="flex size-12 items-center justify-center rounded-2xl border border-[color:var(--edge)] bg-white/70 text-[color:var(--ink)] transition hover:-translate-y-0.5 hover:bg-white"
+            className="flex size-12 items-center justify-center rounded-2xl border border-[color:var(--edge)] bg-white/5 text-[color:var(--ink)] transition hover:border-[color:var(--edge-strong)] hover:bg-white/8"
             onClick={() => setSidebarCollapsed(false)}
-            title="Expand sidebar"
             type="button"
           >
             <PanelLeftOpen className="size-4" />
+            <span className="sr-only">Expand sidebar</span>
           </button>
         ) : (
           <>
-            <div className="space-y-1">
-              <p className="text-[11px] uppercase tracking-[0.32em] text-[color:var(--muted)]">
-                cheatnyu.com
-              </p>
-              <div>
-                <h1
-                  className="text-[1.55rem] leading-none text-[color:var(--ink)]"
-                  style={{
-                    fontFamily:
-                      '"Iowan Old Style","Palatino Linotype","Book Antiqua",Palatino,Georgia,serif',
-                  }}
-                >
-                  Handwritten HW
-                </h1>
-                <p className="mt-1 text-sm text-[color:var(--muted)]">
-                  PDF intake for handwritten paper solutions.
-                </p>
-              </div>
+            <div className="flex items-center gap-2">
+              <span className="block size-2.5 rounded-full bg-[color:var(--accent)]" />
+              <span className="block size-2.5 rounded-full bg-[#c4b5fd]" />
+              <span className="block size-2.5 rounded-full bg-white/30" />
             </div>
             <button
-              className="flex size-11 items-center justify-center rounded-2xl border border-[color:var(--edge)] bg-white/70 text-[color:var(--ink)] transition hover:-translate-y-0.5 hover:bg-white"
+              className="flex size-11 items-center justify-center rounded-2xl border border-[color:var(--edge)] bg-white/5 text-[color:var(--ink)] transition hover:border-[color:var(--edge-strong)] hover:bg-white/8"
               onClick={() =>
                 mobile ? setMobileSidebarOpen(false) : setSidebarCollapsed(true)
               }
-              title={mobile ? "Close sidebar" : "Collapse sidebar"}
               type="button"
             >
               <PanelLeftClose className="size-4" />
+              <span className="sr-only">
+                {mobile ? "Close sidebar" : "Collapse sidebar"}
+              </span>
             </button>
           </>
         )}
@@ -531,16 +565,15 @@ export default function HandwrittenHwStudio() {
 
       <div
         className={cn(
-          "flex-1 space-y-4 overflow-y-auto px-4 py-5",
-          collapsed && "px-3"
+          "flex-1 space-y-4 overflow-y-auto p-4",
+          collapsed ? "px-3" : "px-4"
         )}
       >
         {collapsed ? (
           <>
             <button
-              className="flex h-16 w-full items-center justify-center rounded-[1.35rem] border border-[color:var(--edge)] bg-white/70 text-[color:var(--ink)] shadow-[0_18px_45px_rgba(31,35,25,0.05)] transition hover:-translate-y-0.5 hover:bg-white"
+              className="flex h-16 w-full items-center justify-center rounded-[1.3rem] border border-[color:var(--edge)] bg-white/5 text-[color:var(--ink)] transition hover:border-[color:var(--edge-strong)] hover:bg-white/8"
               onClick={() => pdfInputRef.current?.click()}
-              title={pdfFile ? `Replace ${pdfFile.name}` : "Upload homework PDF"}
               type="button"
             >
               <div className="relative">
@@ -549,207 +582,110 @@ export default function HandwrittenHwStudio() {
                   <span className="absolute -right-1 -top-1 size-2.5 rounded-full bg-[color:var(--accent)]" />
                 ) : null}
               </div>
+              <span className="sr-only">Upload PDF</span>
             </button>
+
             <button
-              className="flex h-16 w-full items-center justify-center rounded-[1.35rem] border border-[color:var(--edge)] bg-white/70 text-[color:var(--ink)] shadow-[0_18px_45px_rgba(31,35,25,0.05)] transition hover:-translate-y-0.5 hover:bg-white"
+              className="flex h-16 w-full items-center justify-center rounded-[1.3rem] border border-[color:var(--edge)] bg-white/5 text-[color:var(--ink)] transition hover:border-[color:var(--edge-strong)] hover:bg-white/8"
               onClick={() => handwritingInputRef.current?.click()}
-              title={
-                referenceFile
-                  ? `Replace ${referenceFile.name}`
-                  : "Add a handwriting reference"
-              }
               type="button"
             >
               <div className="relative">
                 <ImagePlus className="size-5" />
                 {referenceFile ? (
-                  <span className="absolute -right-1 -top-1 size-2.5 rounded-full bg-[color:var(--warm)]" />
+                  <span className="absolute -right-1 -top-1 size-2.5 rounded-full bg-[#c4b5fd]" />
                 ) : null}
               </div>
+              <span className="sr-only">Upload handwriting reference</span>
             </button>
-            <div
-              className="flex h-16 w-full items-center justify-center rounded-[1.35rem] border border-[color:var(--edge)] bg-[color:var(--accentSoft)]/75 text-[color:var(--ink)]"
-              title="FLUX.2 Flex • 1:1 • 1K"
+
+            <button
+              className={cn(
+                "flex h-16 w-full items-center justify-center rounded-[1.3rem] border transition",
+                canGenerate
+                  ? "border-[color:var(--edge-strong)] bg-[color:var(--accent-soft)] text-[color:var(--accent)]"
+                  : "border-[color:var(--edge)] bg-white/5 text-[color:var(--ink-soft)]"
+              )}
+              disabled={!canGenerate}
+              onClick={() => {
+                void handleGenerate();
+                setMobileSidebarOpen(false);
+              }}
+              type="button"
             >
-              <Sparkles className="size-5" />
-            </div>
+              {isGenerating ? (
+                <LoaderCircle className="size-5 animate-spin" />
+              ) : (
+                <Sparkles className="size-5" />
+              )}
+              <span className="sr-only">Generate</span>
+            </button>
           </>
         ) : (
           <>
-            <section className={sidebarSectionClass}>
-              <div className="mb-3 flex items-center gap-3">
-                <div className="flex size-10 items-center justify-center rounded-2xl bg-[color:var(--accentSoft)] text-[color:var(--accent)]">
-                  <FileText className="size-4" />
-                </div>
-                <div>
-                  <h2 className="text-sm font-semibold text-[color:var(--ink)]">
-                    Homework PDF
-                  </h2>
-                  <p className="text-xs text-[color:var(--muted)]">
-                    Replaces the prompt with a clickable PDF upload skeleton.
-                  </p>
-                </div>
-              </div>
-
-              <button
-                className="group relative flex min-h-44 w-full flex-col items-center justify-center gap-3 rounded-[1.35rem] border border-dashed border-[color:var(--edge)] bg-[linear-gradient(135deg,rgba(255,255,255,0.82),rgba(245,240,231,0.96))] px-5 py-6 text-center transition duration-200 hover:-translate-y-0.5 hover:border-[color:var(--accent)] hover:shadow-[0_18px_50px_rgba(41,76,63,0.12)]"
+            <section className={cn(panelClass, "p-3")}>
+              <PreviewPlate
+                active={pdfFile != null}
+                busy={isPreparingPdf}
+                icon={<FileText className="size-5" />}
                 onClick={() => pdfInputRef.current?.click()}
-                type="button"
-              >
-                <div className="absolute inset-0 rounded-[1.35rem] bg-[linear-gradient(120deg,transparent,rgba(255,255,255,0.48),transparent)] opacity-0 transition group-hover:opacity-100" />
-                <div className="relative flex size-15 items-center justify-center rounded-[1.4rem] border border-[color:var(--edge)] bg-white/85 text-[color:var(--accent)]">
-                  {isPreparingPdf ? (
-                    <LoaderCircle className="size-5 animate-spin" />
-                  ) : (
-                    <FileText className="size-5" />
-                  )}
-                </div>
-                {pdfFile ? (
-                  <div className="relative space-y-2">
-                    <p className="text-sm font-semibold text-[color:var(--ink)]">
-                      {pdfFile.name}
-                    </p>
-                    <p className="text-xs uppercase tracking-[0.28em] text-[color:var(--muted)]">
-                      {pdfFile.pageCount} page{pdfFile.pageCount === 1 ? "" : "s"} ·{" "}
-                      {formatBytes(pdfFile.size)}
-                    </p>
-                    <p className="text-sm text-[color:var(--muted)]">
-                      Page 1 is rasterized into a square base image for generation.
-                    </p>
-                  </div>
-                ) : (
-                  <div className="relative space-y-2">
-                    <p className="text-base font-semibold text-[color:var(--ink)]">
-                      Upload your homework answer
-                    </p>
-                    <p className="text-sm text-[color:var(--muted)]">
-                      Click to upload the PDF that should become a handwritten paper.
-                    </p>
-                  </div>
-                )}
-              </button>
+                preview={pdfFile?.dataUrl}
+              />
             </section>
 
-            <section className={sidebarSectionClass}>
+            <section className={cn(panelClass, "p-3")}>
               <button
-                className="flex w-full items-center justify-between gap-3 text-left"
+                className="mb-3 flex w-full items-center justify-between rounded-[1.15rem] border border-transparent p-1 text-[color:var(--ink)] transition hover:border-[color:var(--edge)]"
                 onClick={() => setReferencesExpanded((open) => !open)}
                 type="button"
               >
-                <div className="flex items-center gap-3">
-                  <div className="flex size-10 items-center justify-center rounded-2xl bg-[#f0e4d8] text-[color:var(--warm)]">
+                <div className="flex items-center gap-2">
+                  <div className="flex size-10 items-center justify-center rounded-2xl bg-white/6">
                     <ImagePlus className="size-4" />
                   </div>
-                  <div>
-                    <h2 className="text-sm font-semibold text-[color:var(--ink)]">
-                      References
-                    </h2>
-                    <p className="text-xs text-[color:var(--muted)]">
-                      Uses the photo reference of the user&apos;s handwriting.
-                    </p>
+                  <div className="flex gap-1.5">
+                    <StatusDot active={referenceFile != null} accent="#c4b5fd" />
+                    <StatusDot
+                      active={isPreparingReference}
+                      accent="#8b5cf6"
+                      busy={isPreparingReference}
+                    />
                   </div>
                 </div>
                 {referencesExpanded ? (
-                  <ChevronUp className="size-4 text-[color:var(--muted)]" />
+                  <ChevronUp className="size-4 text-[color:var(--ink-soft)]" />
                 ) : (
-                  <ChevronDown className="size-4 text-[color:var(--muted)]" />
+                  <ChevronDown className="size-4 text-[color:var(--ink-soft)]" />
                 )}
+                <span className="sr-only">Toggle reference section</span>
               </button>
 
               {referencesExpanded ? (
-                <div className="mt-4">
-                  <button
-                    className="group relative block w-full overflow-hidden rounded-[1.45rem] border border-[color:var(--edge)] bg-[linear-gradient(160deg,rgba(255,255,255,0.82),rgba(244,237,226,0.94))] p-3 text-left transition duration-200 hover:-translate-y-0.5 hover:border-[color:var(--warm)] hover:shadow-[0_18px_50px_rgba(135,91,47,0.14)]"
-                    onClick={() => handwritingInputRef.current?.click()}
-                    type="button"
-                  >
-                    <div className="relative aspect-[6/4] overflow-hidden rounded-[1.15rem] border border-[color:var(--edge)] bg-[#f7f1e4]">
-                      {referenceFile ? (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img
-                          alt="Handwriting reference preview"
-                          className="h-full w-full object-cover transition duration-300 group-hover:scale-[1.02]"
-                          src={referenceFile.dataUrl}
-                        />
-                      ) : (
-                        <div className="flex h-full w-full flex-col items-center justify-center gap-3 bg-[radial-gradient(circle_at_top,rgba(186,126,76,0.18),transparent_40%),linear-gradient(180deg,#faf4ea,#f1e6d9)]">
-                          {isPreparingReference ? (
-                            <LoaderCircle className="size-6 animate-spin text-[color:var(--warm)]" />
-                          ) : (
-                            <ImagePlus className="size-6 text-[color:var(--warm)]" />
-                          )}
-                          <p className="text-xs uppercase tracking-[0.32em] text-[color:var(--muted)]">
-                            photo reference
-                          </p>
-                        </div>
-                      )}
-                      <div className="absolute inset-0 flex items-end bg-[linear-gradient(180deg,rgba(28,34,27,0.02),rgba(28,34,27,0.72))] p-4 opacity-0 transition duration-200 group-hover:opacity-100">
-                        <p className="text-sm font-medium text-white">
-                          add a sample of ur handwriting
-                        </p>
-                      </div>
-                    </div>
-                    <div className="mt-3 flex items-center justify-between gap-3">
-                      <div>
-                        <p className="text-sm font-semibold text-[color:var(--ink)]">
-                          {referenceFile ? referenceFile.name : "Handwriting sample"}
-                        </p>
-                        <p className="text-xs uppercase tracking-[0.28em] text-[color:var(--muted)]">
-                          {referenceFile
-                            ? formatBytes(referenceFile.size)
-                            : "jpg · png · webp"}
-                        </p>
-                      </div>
-                      <span className="rounded-full border border-[color:var(--edge)] bg-white/80 px-3 py-1 text-[11px] uppercase tracking-[0.24em] text-[color:var(--muted)]">
-                        photo ref
-                      </span>
-                    </div>
-                  </button>
-                </div>
+                <PreviewPlate
+                  active={referenceFile != null}
+                  busy={isPreparingReference}
+                  icon={<ImagePlus className="size-5" />}
+                  onClick={() => handwritingInputRef.current?.click()}
+                  preview={referenceFile?.dataUrl}
+                />
               ) : null}
             </section>
 
-            <section className={sidebarSectionClass}>
-              <div className="mb-4 flex items-center gap-3">
-                <div className="flex size-10 items-center justify-center rounded-2xl bg-[color:var(--accentSoft)] text-[color:var(--accent)]">
-                  <Square className="size-4" />
-                </div>
-                <div>
-                  <h2 className="text-sm font-semibold text-[color:var(--ink)]">
-                    Output
-                  </h2>
-                  <p className="text-xs text-[color:var(--muted)]">
-                    Model selection removed. FLUX.2 Flex is the default.
-                  </p>
-                </div>
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div className="rounded-[1.15rem] border border-[color:var(--edge)] bg-white/70 p-3">
-                  <p className="text-[11px] uppercase tracking-[0.28em] text-[color:var(--muted)]">
-                    model
-                  </p>
-                  <p className="mt-2 text-base font-semibold text-[color:var(--ink)]">
-                    FLUX.2 Flex
-                  </p>
-                  <p className="mt-1 text-xs text-[color:var(--muted)]">
-                    multi-reference image editing
-                  </p>
-                </div>
-                <div className="rounded-[1.15rem] border border-[color:var(--edge)] bg-white/70 p-3">
-                  <p className="text-[11px] uppercase tracking-[0.28em] text-[color:var(--muted)]">
-                    canvas
-                  </p>
-                  <p className="mt-2 text-base font-semibold text-[color:var(--ink)]">
-                    1:1 · 1K
-                  </p>
-                  <p className="mt-1 text-xs text-[color:var(--muted)]">
-                    standard 1024 × 1024 output
-                  </p>
-                </div>
-              </div>
-              <div className="mt-3 rounded-[1.15rem] border border-[color:var(--edge)] bg-[color:var(--accentSoft)]/55 px-4 py-3 text-sm text-[color:var(--ink)]">
-                The PDF becomes `input_image`. Your handwriting sample is sent as
-                the photo reference on `input_image_2`.
+            <section className={cn(panelClass, "p-4")}>
+              <div className="grid grid-cols-3 gap-3">
+                <IconPill active>
+                  <Sparkles className="size-4" />
+                </IconPill>
+                <IconPill active>
+                  <div className="size-4 rounded-sm border border-current" />
+                </IconPill>
+                <IconPill active>
+                  <div className="flex gap-1">
+                    <span className="block size-1.5 rounded-full bg-current" />
+                    <span className="block size-1.5 rounded-full bg-current" />
+                    <span className="block size-1.5 rounded-full bg-current" />
+                  </div>
+                </IconPill>
               </div>
             </section>
           </>
@@ -759,10 +695,10 @@ export default function HandwrittenHwStudio() {
       <div className="border-t border-[color:var(--edge)] p-4">
         <button
           className={cn(
-            "flex w-full items-center justify-center gap-3 rounded-[1.35rem] px-4 py-3.5 text-sm font-semibold transition",
+            "flex w-full items-center justify-center rounded-[1.35rem] border px-4 py-4 transition",
             canGenerate
-              ? "bg-[color:var(--accent)] text-white shadow-[0_18px_50px_rgba(41,76,63,0.28)] hover:-translate-y-0.5 hover:bg-[#27493e]"
-              : "bg-[#d7ddd4] text-[#6a7268]"
+              ? "border-[color:var(--edge-strong)] bg-[color:var(--accent)] text-white shadow-[0_18px_50px_rgba(139,92,246,0.28)] hover:bg-[#7c3aed]"
+              : "border-[color:var(--edge)] bg-white/5 text-[color:var(--ink-soft)]"
           )}
           disabled={!canGenerate}
           onClick={() => {
@@ -772,15 +708,11 @@ export default function HandwrittenHwStudio() {
           type="button"
         >
           {isGenerating ? (
-            <LoaderCircle className="size-4 animate-spin" />
+            <LoaderCircle className="size-5 animate-spin" />
           ) : (
-            <Sparkles className="size-4" />
+            <Sparkles className="size-5" />
           )}
-          {!collapsed && (
-            <span>
-              {isGenerating ? "Generating handwritten paper" : "Generate"}
-            </span>
-          )}
+          <span className="sr-only">Generate</span>
         </button>
       </div>
     </div>
@@ -791,14 +723,14 @@ export default function HandwrittenHwStudio() {
       className="min-h-screen bg-[color:var(--paper)] text-[color:var(--ink)]"
       style={
         {
-          "--paper": "#e9e0d0",
-          "--panel": "rgba(255,255,255,0.72)",
-          "--ink": "#1d2d26",
-          "--muted": "#6b7166",
-          "--accent": "#2f5b4b",
-          "--accentSoft": "#dde8df",
-          "--warm": "#b17445",
-          "--edge": "rgba(29,45,38,0.1)",
+          "--paper": "#1a0a2e",
+          "--panel": "rgba(45,27,78,0.64)",
+          "--ink": "#f5f0ff",
+          "--ink-soft": "#a89acb",
+          "--accent": "#8b5cf6",
+          "--accent-soft": "rgba(139,92,246,0.16)",
+          "--edge": "rgba(139,92,246,0.22)",
+          "--edge-strong": "rgba(139,92,246,0.48)",
         } as CSSProperties
       }
     >
@@ -822,14 +754,14 @@ export default function HandwrittenHwStudio() {
       />
 
       <div className="pointer-events-none fixed inset-0">
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(47,91,75,0.17),transparent_34%),radial-gradient(circle_at_bottom_right,rgba(177,116,69,0.14),transparent_34%),linear-gradient(135deg,#f0e7d8,#e4d9c5)]" />
-        <div className="absolute inset-0 opacity-30 [background-image:linear-gradient(rgba(29,45,38,0.05)_1px,transparent_1px),linear-gradient(90deg,rgba(29,45,38,0.05)_1px,transparent_1px)] [background-size:36px_36px]" />
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(139,92,246,0.22),transparent_30%),radial-gradient(circle_at_bottom_right,rgba(124,58,237,0.2),transparent_28%),linear-gradient(180deg,#1a0a2e,#140821)]" />
+        <div className="absolute inset-0 opacity-30 [background-image:linear-gradient(rgba(139,92,246,0.08)_1px,transparent_1px),linear-gradient(90deg,rgba(139,92,246,0.08)_1px,transparent_1px)] [background-size:38px_38px]" />
       </div>
 
       <div className="relative flex min-h-screen">
         <aside
           className={cn(
-            "hidden border-r border-[color:var(--edge)] bg-white/42 backdrop-blur-xl transition-[width] duration-300 lg:flex",
+            "hidden border-r border-[color:var(--edge)] bg-[rgba(20,9,35,0.72)] backdrop-blur-xl transition-[width] duration-300 lg:flex",
             sidebarCollapsed
               ? DESKTOP_SIDEBAR_COLLAPSED_WIDTH
               : DESKTOP_SIDEBAR_WIDTH
@@ -840,7 +772,7 @@ export default function HandwrittenHwStudio() {
 
         <div
           className={cn(
-            "fixed inset-0 z-30 bg-[rgba(18,22,18,0.18)] transition-opacity lg:hidden",
+            "fixed inset-0 z-30 bg-black/40 transition-opacity lg:hidden",
             mobileSidebarOpen
               ? "pointer-events-auto opacity-100"
               : "pointer-events-none opacity-0"
@@ -850,7 +782,7 @@ export default function HandwrittenHwStudio() {
 
         <aside
           className={cn(
-            "fixed inset-y-0 left-0 z-40 w-[min(92vw,24rem)] border-r border-[color:var(--edge)] bg-[#f7f2e9]/95 backdrop-blur-xl transition-transform duration-300 lg:hidden",
+            "fixed inset-y-0 left-0 z-40 w-[min(92vw,24rem)] border-r border-[color:var(--edge)] bg-[rgba(20,9,35,0.95)] backdrop-blur-xl transition-transform duration-300 lg:hidden",
             mobileSidebarOpen ? "translate-x-0" : "-translate-x-full"
           )}
         >
@@ -858,116 +790,90 @@ export default function HandwrittenHwStudio() {
         </aside>
 
         <main className="flex min-w-0 flex-1 flex-col p-4 sm:p-5 lg:p-6">
-          <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+          <div className="mb-4 flex items-center justify-between gap-3">
             <div className="flex items-center gap-3">
               <button
-                className="flex size-11 items-center justify-center rounded-2xl border border-[color:var(--edge)] bg-white/80 text-[color:var(--ink)] shadow-[0_18px_45px_rgba(31,35,25,0.06)] lg:hidden"
+                className="flex size-11 items-center justify-center rounded-2xl border border-[color:var(--edge)] bg-white/6 text-[color:var(--ink)] shadow-[0_18px_45px_rgba(0,0,0,0.22)] lg:hidden"
                 onClick={() => setMobileSidebarOpen(true)}
                 type="button"
               >
                 <Menu className="size-4" />
+                <span className="sr-only">Open sidebar</span>
               </button>
-              <div>
-                <p className="text-[11px] uppercase tracking-[0.34em] text-[color:var(--muted)]">
-                  cheatnyu.com/handwritten-hw
-                </p>
-                <h2
-                  className="mt-1 text-[2rem] leading-none text-[color:var(--ink)] sm:text-[2.45rem]"
-                  style={{
-                    fontFamily:
-                      '"Iowan Old Style","Palatino Linotype","Book Antiqua",Palatino,Georgia,serif',
-                  }}
-                >
-                  Handwritten paper generator
-                </h2>
+
+              <div className="flex items-center gap-2 rounded-full border border-[color:var(--edge)] bg-white/6 px-4 py-3">
+                <StatusDot active={pdfFile != null} />
+                <StatusDot active={referenceFile != null} accent="#c4b5fd" />
+                <StatusDot active={generatedImage != null} accent="#ffffff" />
+                <StatusDot active={hasError} accent="#ef4444" />
               </div>
             </div>
 
-            <div className="flex flex-wrap items-center gap-2">
-              <span className="rounded-full border border-[color:var(--edge)] bg-white/75 px-4 py-2 text-[11px] uppercase tracking-[0.28em] text-[color:var(--muted)]">
-                {readyLabel}
-              </span>
-              <span className="rounded-full border border-[color:var(--edge)] bg-[color:var(--accentSoft)]/75 px-4 py-2 text-[11px] uppercase tracking-[0.28em] text-[color:var(--accent)]">
-                FLUX.2 Flex · 1:1 · 1K
-              </span>
+            <div className="flex items-center gap-2">
+              <button
+                className={cn(
+                  "flex size-11 items-center justify-center rounded-2xl border transition",
+                  generatedImage
+                    ? "border-[color:var(--edge-strong)] bg-white/6 text-[color:var(--ink)] hover:bg-white/10"
+                    : "border-[color:var(--edge)] bg-white/4 text-[color:var(--ink-soft)]"
+                )}
+                disabled={!generatedImage}
+                onClick={handleDownload}
+                type="button"
+              >
+                <Download className="size-4" />
+                <span className="sr-only">Download result</span>
+              </button>
+              <button
+                className={cn(
+                  "flex size-11 items-center justify-center rounded-2xl border transition sm:hidden",
+                  canGenerate
+                    ? "border-[color:var(--edge-strong)] bg-[color:var(--accent)] text-white"
+                    : "border-[color:var(--edge)] bg-white/4 text-[color:var(--ink-soft)]"
+                )}
+                disabled={!canGenerate}
+                onClick={() => void handleGenerate()}
+                type="button"
+              >
+                {isGenerating ? (
+                  <LoaderCircle className="size-4 animate-spin" />
+                ) : (
+                  <Sparkles className="size-4" />
+                )}
+                <span className="sr-only">Generate</span>
+              </button>
             </div>
           </div>
 
-          <div className="mb-4 grid gap-3 xl:grid-cols-[minmax(0,1fr)_20rem]">
-            <div className="rounded-[1.7rem] border border-[color:var(--edge)] bg-white/68 px-5 py-4 shadow-[0_24px_60px_rgba(31,35,25,0.08)] backdrop-blur-xl">
-              <div className="flex items-start justify-between gap-4">
-                <div>
-                  <p className="text-sm font-semibold text-[color:var(--ink)]">
-                    Main canvas
-                  </p>
-                  <p className="mt-1 text-sm text-[color:var(--muted)]">
-                    The PDF is ingested as the base image, the handwriting image
-                    acts as the photo reference, and the rendered page lands here.
-                  </p>
+          <div className="grid min-h-0 flex-1 gap-4 xl:grid-cols-[minmax(0,1fr)_18rem]">
+            <section
+              className={cn(
+                "relative min-h-[24rem] overflow-hidden rounded-[2rem] border p-3 shadow-[0_34px_90px_rgba(0,0,0,0.34)]",
+                hasError
+                  ? "border-red-400/30 bg-[linear-gradient(180deg,rgba(51,16,26,0.88),rgba(23,9,19,0.95))]"
+                  : "border-[color:var(--edge)] bg-[linear-gradient(180deg,rgba(42,24,71,0.92),rgba(15,7,26,0.98))]"
+              )}
+            >
+              <div className="absolute inset-x-3 top-3 z-10 flex items-center justify-between rounded-[1.2rem] border border-[color:var(--edge)] bg-black/18 px-4 py-3 backdrop-blur-lg">
+                <div className="flex gap-2">
+                  <StatusDot active={pdfFile != null} />
+                  <StatusDot active={referenceFile != null} accent="#c4b5fd" />
+                  <StatusDot
+                    active={isGenerating}
+                    accent="#ffffff"
+                    busy={isGenerating}
+                  />
                 </div>
-                <div className="hidden items-center gap-2 sm:flex">
-                  <button
-                    className={cn(
-                      "rounded-full border border-[color:var(--edge)] px-4 py-2 text-xs uppercase tracking-[0.24em] transition",
-                      generatedImage
-                        ? "bg-white text-[color:var(--ink)] hover:border-[color:var(--accent)]"
-                        : "bg-[#edf0ea] text-[#95a093]"
-                    )}
-                    disabled={!generatedImage}
-                    onClick={handleDownload}
-                    type="button"
-                  >
-                    <span className="inline-flex items-center gap-2">
-                      <Download className="size-3.5" />
-                      Download
-                    </span>
-                  </button>
-                </div>
-              </div>
-            </div>
-
-            <div className="rounded-[1.7rem] border border-[color:var(--edge)] bg-white/68 px-5 py-4 shadow-[0_24px_60px_rgba(31,35,25,0.08)] backdrop-blur-xl">
-              <div className="flex items-center gap-3">
-                <div className="flex size-10 items-center justify-center rounded-2xl bg-[color:var(--accentSoft)] text-[color:var(--accent)]">
-                  <ScanSearch className="size-4" />
-                </div>
-                <div>
-                  <p className="text-sm font-semibold text-[color:var(--ink)]">
-                    Pipeline
-                  </p>
-                  <p className="text-sm text-[color:var(--muted)]">
-                    PDF in, handwritten image out.
-                  </p>
-                </div>
-              </div>
-              <p className="mt-3 text-sm leading-6 text-[color:var(--muted)]">
-                Default settings are locked to FLUX.2 Flex, a 1:1 aspect ratio,
-                and a standard 1024 × 1024 render. The API uses the PDF preview
-                as `input_image` and the handwriting photo as `input_image_2`.
-              </p>
-            </div>
-          </div>
-
-          <div className="grid min-h-0 flex-1 gap-4 xl:grid-cols-[minmax(0,1fr)_20rem]">
-            <section className="relative min-h-[24rem] overflow-hidden rounded-[2rem] border border-[color:var(--edge)] bg-[linear-gradient(180deg,rgba(255,255,255,0.82),rgba(248,243,234,0.92))] p-3 shadow-[0_34px_90px_rgba(31,35,25,0.11)]">
-              <div className="absolute inset-x-3 top-3 z-10 flex items-center justify-between gap-3 rounded-[1.2rem] border border-[color:var(--edge)] bg-white/78 px-4 py-3 backdrop-blur-lg">
-                <div>
-                  <p className="text-[11px] uppercase tracking-[0.3em] text-[color:var(--muted)]">
-                    canvas
-                  </p>
-                  <p className="mt-1 text-sm font-semibold text-[color:var(--ink)]">
-                    {generatedImage ? "Generated handwritten sheet" : "Preview surface"}
-                  </p>
-                </div>
-                <div className="rounded-full border border-[color:var(--edge)] bg-[color:var(--accentSoft)]/75 px-4 py-2 text-[11px] uppercase tracking-[0.28em] text-[color:var(--accent)]">
-                  {generatedImage ? "result" : "preview"}
+                <div className="flex gap-2">
+                  <StatusDot active={generatedImage != null} accent="#ffffff" />
+                  <StatusDot active={hasError} accent="#ef4444" />
                 </div>
               </div>
 
               <div className="flex h-full min-h-[24rem] items-center justify-center pt-20">
                 <canvas
                   ref={canvasRef}
-                  className="aspect-square max-h-full w-full rounded-[1.7rem] border border-[rgba(40,55,48,0.1)] bg-[#f9f4ea] object-contain shadow-[0_26px_80px_rgba(46,34,16,0.12)]"
+                  className="aspect-square max-h-full w-full rounded-[1.7rem] border border-[color:var(--edge)] bg-[#12071f] object-contain shadow-[0_26px_80px_rgba(0,0,0,0.32)]"
                   height={CANVAS_SIZE}
                   width={CANVAS_SIZE}
                 />
@@ -975,66 +881,87 @@ export default function HandwrittenHwStudio() {
             </section>
 
             <section className="space-y-4">
-              <div className="rounded-[1.7rem] border border-[color:var(--edge)] bg-white/68 p-5 shadow-[0_24px_60px_rgba(31,35,25,0.08)] backdrop-blur-xl">
-                <p className="text-[11px] uppercase tracking-[0.3em] text-[color:var(--muted)]">
-                  status
-                </p>
-                <p className="mt-3 text-sm leading-6 text-[color:var(--ink)]">
-                  {statusMessage}
-                </p>
-                {errorMessage ? (
-                  <div className="mt-4 rounded-[1.2rem] border border-[#d6ad91] bg-[#f6e5d8] px-4 py-3 text-sm text-[#7f4a2a]">
-                    {errorMessage}
-                  </div>
-                ) : null}
+              <div className={cn(panelClass, "p-3")}>
+                <PreviewPlate
+                  active={pdfFile != null}
+                  busy={isPreparingPdf}
+                  icon={<FileText className="size-5" />}
+                  preview={pdfFile?.dataUrl}
+                />
               </div>
 
-              <div className="rounded-[1.7rem] border border-[color:var(--edge)] bg-white/68 p-5 shadow-[0_24px_60px_rgba(31,35,25,0.08)] backdrop-blur-xl">
-                <p className="text-[11px] uppercase tracking-[0.3em] text-[color:var(--muted)]">
-                  assets
-                </p>
-                <div className="mt-4 space-y-3">
-                  <div className="rounded-[1.2rem] border border-[color:var(--edge)] bg-white/80 px-4 py-3">
-                    <p className="text-xs uppercase tracking-[0.26em] text-[color:var(--muted)]">
-                      homework PDF
-                    </p>
-                    <p className="mt-2 text-sm font-medium text-[color:var(--ink)]">
-                      {pdfFile ? pdfFile.name : "Nothing uploaded yet"}
-                    </p>
+              <div className={cn(panelClass, "p-3")}>
+                <PreviewPlate
+                  active={referenceFile != null}
+                  busy={isPreparingReference}
+                  icon={<ImagePlus className="size-5" />}
+                  preview={referenceFile?.dataUrl}
+                />
+              </div>
+
+              <div className={cn(panelClass, "p-4")}>
+                <div className="grid grid-cols-2 gap-3">
+                  <button
+                    className={cn(
+                      "flex h-16 items-center justify-center rounded-[1.3rem] border transition",
+                      canGenerate
+                        ? "border-[color:var(--edge-strong)] bg-[color:var(--accent-soft)] text-[color:var(--accent)] hover:bg-[rgba(139,92,246,0.22)]"
+                        : "border-[color:var(--edge)] bg-white/4 text-[color:var(--ink-soft)]"
+                    )}
+                    disabled={!canGenerate}
+                    onClick={() => void handleGenerate()}
+                    type="button"
+                  >
+                    {isGenerating ? (
+                      <LoaderCircle className="size-5 animate-spin" />
+                    ) : (
+                      <Sparkles className="size-5" />
+                    )}
+                    <span className="sr-only">Generate</span>
+                  </button>
+
+                  <button
+                    className={cn(
+                      "flex h-16 items-center justify-center rounded-[1.3rem] border transition",
+                      generatedImage
+                        ? "border-[color:var(--edge-strong)] bg-white/6 text-[color:var(--ink)] hover:bg-white/10"
+                        : "border-[color:var(--edge)] bg-white/4 text-[color:var(--ink-soft)]"
+                    )}
+                    disabled={!generatedImage}
+                    onClick={handleDownload}
+                    type="button"
+                  >
+                    <Download className="size-5" />
+                    <span className="sr-only">Download</span>
+                  </button>
+                </div>
+
+                <div className="mt-4 flex items-center justify-between rounded-[1.3rem] border border-[color:var(--edge)] bg-white/4 px-4 py-3">
+                  <div className="flex gap-2">
+                    <StatusDot active={pdfFile != null} />
+                    <StatusDot active={referenceFile != null} accent="#c4b5fd" />
+                    <StatusDot active={generatedImage != null} accent="#ffffff" />
                   </div>
-                  <div className="rounded-[1.2rem] border border-[color:var(--edge)] bg-white/80 px-4 py-3">
-                    <p className="text-xs uppercase tracking-[0.26em] text-[color:var(--muted)]">
-                      handwriting ref
-                    </p>
-                    <p className="mt-2 text-sm font-medium text-[color:var(--ink)]">
-                      {referenceFile ? referenceFile.name : "Add a handwriting sample"}
-                    </p>
-                  </div>
-                  <div className="rounded-[1.2rem] border border-[color:var(--edge)] bg-[color:var(--accentSoft)]/75 px-4 py-3">
-                    <p className="text-xs uppercase tracking-[0.26em] text-[color:var(--muted)]">
-                      last render
-                    </p>
-                    <p className="mt-2 text-sm font-medium text-[color:var(--ink)]">
-                      {lastGeneratedAt ?? "No render yet"}
-                    </p>
+                  <div className="flex gap-2">
+                    <StatusDot
+                      active={isPreparingPdf}
+                      accent="#8b5cf6"
+                      busy={isPreparingPdf}
+                    />
+                    <StatusDot
+                      active={isPreparingReference}
+                      accent="#c4b5fd"
+                      busy={isPreparingReference}
+                    />
+                    <StatusDot
+                      active={isGenerating}
+                      accent="#ffffff"
+                      busy={isGenerating}
+                    />
+                    <StatusDot active={hasError} accent="#ef4444" />
                   </div>
                 </div>
               </div>
-
-              <button
-                className={cn(
-                  "flex w-full items-center justify-center gap-3 rounded-[1.45rem] px-5 py-4 text-sm font-semibold transition sm:hidden",
-                  generatedImage
-                    ? "border border-[color:var(--edge)] bg-white/78 text-[color:var(--ink)]"
-                    : "bg-[#d7ddd4] text-[#6a7268]"
-                )}
-                disabled={!generatedImage}
-                onClick={handleDownload}
-                type="button"
-              >
-                <Download className="size-4" />
-                Download result
-              </button>
             </section>
           </div>
         </main>
