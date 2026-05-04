@@ -1,6 +1,6 @@
 "use client";
 
-import type { CSSProperties } from "react";
+import type { CSSProperties, FormEvent } from "react";
 import { useEffect, useMemo, useState } from "react";
 import {
   layoutWithLines,
@@ -64,6 +64,9 @@ function parseLineSegments(line: string): Segment[] {
 
 export default function AsciiAnimation() {
   const [animationPhase, setAnimationPhase] = useState(0);
+  const [email, setEmail] = useState("");
+  const [emailError, setEmailError] = useState("");
+  const [isWaitlisted, setIsWaitlisted] = useState(false);
   const [layoutMetrics, setLayoutMetrics] = useState<LayoutMetrics | null>(null);
 
   useEffect(() => {
@@ -93,7 +96,7 @@ export default function AsciiAnimation() {
 
     const updateFit = () => {
       const availableWidth = Math.max(280, window.innerWidth - 48);
-      const availableHeight = Math.max(220, window.innerHeight - 136);
+      const availableHeight = Math.max(180, window.innerHeight - 220);
       const fitScale = Math.min(
         availableWidth / naturalWidth,
         availableHeight / fullLayout.height,
@@ -126,8 +129,28 @@ export default function AsciiAnimation() {
     ? { "--ascii-font-size": `${layoutMetrics.fontSize}px` }
     : undefined;
 
+  const handleWaitlistSubmit = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+
+    const normalizedEmail = email.trim().toLowerCase();
+    if (!/^[^\s@]+@nyu\.edu$/.test(normalizedEmail)) {
+      setEmailError("Use your @nyu.edu email.");
+      return;
+    }
+
+    setIsWaitlisted(true);
+  };
+
+  if (isWaitlisted) {
+    return (
+      <main className="ascii-container waitlist-confirmation flex min-h-screen w-full items-center justify-center px-6">
+        <p>you&apos;re on the waitlist</p>
+      </main>
+    );
+  }
+
   return (
-    <div className="ascii-container flex min-h-screen w-full flex-col items-center justify-center px-6">
+    <main className="ascii-container flex min-h-screen w-full flex-col items-center justify-center px-6">
       <CheatNyuWordmark />
       <pre
         className="ascii-art"
@@ -144,6 +167,33 @@ export default function AsciiAnimation() {
           </span>
         ))}
       </pre>
-    </div>
+      <form className="waitlist-form" noValidate onSubmit={handleWaitlistSubmit}>
+        <label className="sr-only" htmlFor="waitlist-email">
+          NYU email
+        </label>
+        <input
+          aria-describedby={emailError ? "waitlist-email-error" : undefined}
+          aria-invalid={emailError ? "true" : "false"}
+          autoComplete="email"
+          className="waitlist-email-input"
+          id="waitlist-email"
+          inputMode="email"
+          onChange={(event) => {
+            setEmail(event.target.value);
+            if (emailError) setEmailError("");
+          }}
+          placeholder="email@nyu.edu"
+          type="email"
+          value={email}
+        />
+        <p
+          aria-live="polite"
+          className="waitlist-email-error"
+          id="waitlist-email-error"
+        >
+          {emailError}
+        </p>
+      </form>
+    </main>
   );
 }

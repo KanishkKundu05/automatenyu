@@ -43,6 +43,62 @@ body {
   will-change: contents, filter;
 }
 
+.waitlist-form {
+  display: flex;
+  width: min(100%, 340px);
+  min-height: 72px;
+  flex-direction: column;
+  align-items: stretch;
+  margin-top: clamp(18px, 3vh, 34px);
+}
+
+.waitlist-email-input {
+  width: 100%;
+  height: 44px;
+  border: 1px solid rgba(245, 240, 255, 0.34);
+  border-radius: 8px;
+  background: rgba(26, 10, 46, 0.8);
+  color: #ffffff;
+  font: inherit;
+  font-size: 14px;
+  outline: none;
+  padding: 0 14px;
+  text-align: center;
+  transition: border-color 150ms ease, box-shadow 150ms ease;
+}
+
+.waitlist-email-input::placeholder {
+  color: rgba(245, 240, 255, 0.56);
+}
+
+.waitlist-email-input:focus {
+  border-color: #8b5cf6;
+  box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.2),
+    0 0 18px rgba(139, 92, 246, 0.18);
+}
+
+.waitlist-email-input[aria-invalid="true"] {
+  border-color: #ff6b9d;
+}
+
+.waitlist-email-error {
+  min-height: 18px;
+  margin-top: 8px;
+  color: #ff9abb;
+  font-size: 12px;
+  line-height: 1.4;
+  text-align: center;
+}
+
+.waitlist-confirmation {
+  color: #ffffff;
+  font-size: clamp(20px, 3vw, 34px);
+  line-height: 1.2;
+  text-align: center;
+  text-shadow: 0 0 10px rgba(139, 92, 246, 0.45),
+    0 0 20px rgba(255, 255, 255, 0.18);
+}
+
 .cheat-wordmark {
   --cheat-cell-size: clamp(6px, 1.1vw, 12px);
   --cheat-cell-gap: clamp(2px, 0.32vw, 4px);
