@@ -1,5 +1,5 @@
 // NYU Logo ASCII Art
-// Flame lines animate by shifting left/right.
+// Flame lines animate with internal shimmer.
 // Rectangle/handle lines are widened 20%.
 
 const BASE_ART = `=##################################################################################################+
@@ -64,6 +64,12 @@ const FLAME_END = 32;
 const WIDEN_LINES = [30, 31, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48];
 const WIDEN_FACTOR = 0.2;
 const OFFSETS = [0, 1, 3, 2, 0, -1, -3, -2];
+const DETAIL_RAMP = " .:-=+*#";
+
+export interface PretextFrameMetrics {
+  lineWidths: number[];
+  naturalWidth: number;
+}
 
 // --- Utilities ---
 
@@ -79,25 +85,6 @@ function getDesignBounds(
     }
   }
   return start === -1 ? null : { start, end };
-}
-
-/** Shift the non-% design block left (negative) or right (positive). */
-function shiftDesign(line: string, offset: number): string {
-  if (offset === 0) return line;
-  const first = line[0];
-  const last = line[line.length - 1];
-  const inner = line.slice(1, -1);
-  const bounds = getDesignBounds(inner);
-  if (!bounds) return line;
-
-  const newLeft = bounds.start + offset;
-  const newRight = inner.length - 1 - bounds.end - offset;
-  if (newLeft < 0 || newRight < 0) return line;
-
-  const design = inner.slice(bounds.start, bounds.end + 1);
-  return (
-    first + "%".repeat(newLeft) + design + "%".repeat(newRight) + last
-  );
 }
 
 function getMostCommon(s: string): string {
@@ -154,6 +141,71 @@ function widenDesign(line: string, factor: number): string {
   );
 }
 
+function clamp(value: number, min: number, max: number): number {
+  return Math.min(max, Math.max(min, value));
+}
+
+function energizeDesign(line: string, phase: number, row: number, intensity: number): string {
+  const first = line[0];
+  const last = line[line.length - 1];
+  const inner = line.slice(1, -1);
+  const bounds = getDesignBounds(inner);
+  if (!bounds) return line;
+
+  const chars = inner.split("");
+  for (let i = bounds.start; i <= bounds.end; i++) {
+    const ch = chars[i];
+    if (ch === "%") continue;
+
+    const baseIndex = DETAIL_RAMP.indexOf(ch);
+    const current = baseIndex === -1 ? Math.floor(DETAIL_RAMP.length / 2) : baseIndex;
+    const flicker =
+      Math.sin(phase * 4.2 + row * 0.77 + i * 0.19) +
+      Math.sin(phase * 7.1 + row * 0.21 - i * 0.13) * 0.45;
+    const lift = Math.round(flicker * intensity);
+    chars[i] = DETAIL_RAMP[clamp(current + lift, 0, DETAIL_RAMP.length - 1)];
+  }
+
+  return first + chars.join("") + last;
+}
+
+function cropVisibleArt(lines: string[]): string[] {
+  let top = -1;
+  let bottom = -1;
+  let left = Number.POSITIVE_INFINITY;
+  let right = -1;
+
+  lines.forEach((line, row) => {
+    for (let col = 0; col < line.length; col++) {
+      if (line[col] === " ") continue;
+      if (top === -1) top = row;
+      bottom = row;
+      left = Math.min(left, col);
+      right = Math.max(right, col);
+    }
+  });
+
+  if (top === -1) return [];
+  return lines.slice(top, bottom + 1).map((line) => line.slice(left, right + 1));
+}
+
+export function createDynamicFrame(phase: number): string[] {
+  const rendered = art.map((baseLine, i) => {
+    if (i >= FLAME_START && i <= FLAME_END) {
+      const progress = (i - FLAME_START) / (FLAME_END - FLAME_START);
+      const line = energizeDesign(baseLine, phase, i, 1.8 - progress * 0.75);
+      return line.slice(1, -1).replaceAll("%", " ");
+    } else if (WIDEN_LINES.includes(i)) {
+      const line = energizeDesign(baseLine, phase, i, 0.35);
+      return line.slice(1, -1).replaceAll("%", " ");
+    } else {
+      return " ".repeat(Math.max(0, baseLine.length - 2));
+    }
+  });
+
+  return cropVisibleArt(rendered);
+}
+
 // --- Build frames ---
 
 // 1. Widen rectangle / handle lines on the base art
@@ -161,13 +213,5 @@ const art = BASE_ART.map((line, i) =>
   WIDEN_LINES.includes(i) ? widenDesign(line, WIDEN_FACTOR) : line
 );
 
-// 2. Generate animation frames (flame shifts, rest stays static)
-export const frames: string[][] = OFFSETS.map((baseOffset) =>
-  art.map((line, i) => {
-    if (i < FLAME_START || i > FLAME_END) return line;
-    // Taper: top of flame gets full shift, base barely moves
-    const progress = (i - FLAME_START) / (FLAME_END - FLAME_START);
-    const lineOffset = Math.round(baseOffset * (1 - progress * 0.7));
-    return shiftDesign(line, lineOffset);
-  })
-);
+// 2. Generate static frames for sizing/layout reference.
+export const frames: string[][] = OFFSETS.map(() => art);
